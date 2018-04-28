@@ -39,8 +39,9 @@ func (n *Node) rjoin(s *Node) {
 
 // LinkList is a double linked list implementation
 type LinkList struct {
-	Head     *Node
-	Tail     *Node
+	Head *Node
+	Tail *Node
+	// TODO should not be modified outside
 	Len      int64
 	nodePool NodePool
 	maxLen   int
@@ -88,9 +89,6 @@ func (nl *LinkList) Push(n *Node) {
 	n.pre.Unlock()
 	n.next.Unlock()
 	n.Unlock()
-	for atomic.LoadInt64(&nl.Len) > int64(nl.maxLen) {
-		nl.Pop()
-	}
 }
 
 // Up make the given Node push to top
@@ -111,9 +109,6 @@ func (nl *LinkList) Up(n *Node) {
 	n.pre.Unlock()
 	n.next.Unlock()
 	n.Unlock()
-	for atomic.LoadInt64(&nl.Len) > int64(nl.maxLen) {
-		nl.Pop()
-	}
 }
 
 // Unlink free a node from LinkList
