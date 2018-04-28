@@ -12,3 +12,8 @@ type Hurry interface {
 	GetLastN(n int) []interface{}
 	GetAll() []interface{}
 }
+
+// NewHurry will gen a Hurry implement LRU cache
+func NewHurry(n int) Hurry {
+	return nil
+}

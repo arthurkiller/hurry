@@ -1,30 +1,20 @@
 // leakybuf provides leaky buffer, based on the example in Effective Go.
 package hurry
 
-//const leakyBufSize = 4108 // data.len(2) + hmacsha1(10) + data(4096)
-//const maxNBuf = 2048
-//var leakyBuf = NewLeakyBuf(maxNBuf, leakyBufSize)
+type NodePool chan *Node
 
-type LeakyBuf struct {
-	bufSize  int // size of each buffer
-	freeList chan []byte
-}
-
-// NewLeakyBuf creates a leaky buffer which can hold at most n buffer, each
+// NewNodePool creates a leaky buffer which can hold at most n buffer, each
 // with bufSize bytes.
-func NewLeakyBuf(n, bufSize int) *LeakyBuf {
-	return &LeakyBuf{
-		bufSize:  bufSize,
-		freeList: make(chan []byte, n),
-	}
+func NewNodePool(n int) NodePool {
+	return make(chan *Node, n)
 }
 
 // Get returns a buffer from the leaky buffer or create a new buffer.
-func (lb *LeakyBuf) Get() (b []byte) {
+func (lb *NodePool) Get() (n *Node) {
 	select {
-	case b = <-lb.freeList:
+	case n = <-*lb:
 	default:
-		b = make([]byte, lb.bufSize)
+		n = &Node{}
 	}
 	return
 }
@@ -32,12 +22,9 @@ func (lb *LeakyBuf) Get() (b []byte) {
 // Put add the buffer into the free buffer pool for reuse. Panic if the buffer
 // size is not the same with the leaky buffer's. This is intended to expose
 // error usage of leaky buffer.
-func (lb *LeakyBuf) Put(b []byte) {
-	if len(b) != lb.bufSize {
-		panic("invalid buffer size that's put into leaky buffer")
-	}
+func (lb *NodePool) Put(n *Node) {
 	select {
-	case lb.freeList <- b:
+	case *lb <- n:
 	default:
 	}
 	return
