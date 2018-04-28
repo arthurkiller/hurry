@@ -14,15 +14,28 @@ type Node struct {
 	sync.RWMutex
 }
 
+// unsafe free node
 func (n *Node) free() {
 	n.pre.next = n.next
 	n.next.pre = n.pre
 	n.next, n.pre = nil, nil
 }
 
-// TODO not implement yet
-func (n *Node) linsert(s *Node) {}
-func (n *Node) rinsert(s *Node) {}
+// unsafe ljoin
+func (n *Node) ljoin(s *Node) {
+	s.pre = n.pre
+	s.next = n
+	n.pre.next = s
+	n.pre = s
+}
+
+// unsafe rjoin
+func (n *Node) rjoin(s *Node) {
+	s.pre = n
+	s.next = n.next
+	n.next.pre = s
+	n.next = s
+}
 
 // LinkList is a double linked list implementation
 type LinkList struct {
@@ -54,10 +67,10 @@ func (nl *LinkList) Pop() (*Node, bool) {
 	}
 
 	nl.Tail.Lock()
-	atomic.AddInt64(&nl.Len, -1)
 	n := nl.Tail.pre
 	n.Lock()
 	n.pre.Lock()
+	atomic.AddInt64(&nl.Len, -1)
 	n.free()
 	n.pre.Unlock()
 	n.next.Unlock()
@@ -67,26 +80,40 @@ func (nl *LinkList) Pop() (*Node, bool) {
 
 // Push will push a Node to head
 func (nl *LinkList) Push(n *Node) {
+	n.Lock()
 	nl.Head.Lock()
 	nl.Head.next.Lock()
-	n.next = nl.Head.next
-	n.pre = nl.Head
-	n.pre.next = n
-	n.next.pre = n
 	atomic.AddInt64(&nl.Len, 1)
+	nl.Head.rjoin(n)
 	n.pre.Unlock()
 	n.next.Unlock()
+	n.Unlock()
 	for atomic.LoadInt64(&nl.Len) > int64(nl.maxLen) {
 		nl.Pop()
 	}
 }
 
 // Up make the given Node push to top
+// FIXME maybe race
 func (nl *LinkList) Up(n *Node) {
 	if n == nil || n.pre == nil || n.next == nil {
 		panic("invalid link node")
 	}
-	nl.Push(nl.UnLink(n))
+	n.Lock()
+	n.pre.Lock()
+	n.next.Lock()
+	n.free()
+	n.pre.Unlock()
+	n.next.Unlock()
+	nl.Head.Lock()
+	nl.Head.next.Lock()
+	nl.Head.rjoin(n)
+	n.pre.Unlock()
+	n.next.Unlock()
+	n.Unlock()
+	for atomic.LoadInt64(&nl.Len) > int64(nl.maxLen) {
+		nl.Pop()
+	}
 }
 
 // Unlink free a node from LinkList
@@ -95,10 +122,9 @@ func (nl *LinkList) UnLink(n *Node) *Node {
 		panic("invalid link node")
 	}
 	n.Lock()
-	atomic.AddInt64(&nl.Len, -1)
-
 	n.pre.Lock()
 	n.next.Lock()
+	atomic.AddInt64(&nl.Len, -1)
 	n.free()
 	n.pre.Unlock()
 	n.next.Unlock()
@@ -112,13 +138,16 @@ func (nl *LinkList) Find(key string) (*Node, bool) {
 		return nil, false
 	}
 
+	nl.Head.next.RLock()
 	var n *Node = nl.Head.next
-	n.RLock()
-	for n.key != key {
+	for n.key != key && n != nl.Tail {
 		n.next.RLock()
 		n = n.next
 		n.pre.RUnlock()
 	}
 	n.RUnlock()
+	if n == nl.Tail {
+		return nil, false
+	}
 	return nl.UnLink(n), true
 }
