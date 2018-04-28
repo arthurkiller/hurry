@@ -21,11 +21,11 @@ func NewLRU(n int) *LRU {
 	}
 }
 
-func (l *LRU) Get(key string) (interface{}, bool) {
+func (l *LRU) Get(key string) interface{} {
 	if n, ok := l.m[key]; ok {
-		return n, ok
+		return n
 	}
-	return nil, false
+	return nil
 }
 
 func (l *LRU) Put(key string, obj interface{}) {
